@@ -1,5 +1,6 @@
-using System.Reflection;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
+using System.Reflection;
 
 namespace CutilloRigby.Startup;
 
@@ -21,17 +22,36 @@ public static class StartupHelpers
     public static void RunCustomStartupActionsFromAssemblies<TStartup>(Action<TStartup> action, params Assembly[] assemblies)
         where TStartup : IStartup
     {
-        var logger = GetLogger();
-        var startupTypeName = typeof(TStartup).Name;
+        Action<string, string> logStart = (startupTypeName, assemblyName) => { };
+        Action<string, string> logRun = (startupTypeName, startupName) => { };
+        Action<Exception, string, string> logError = (ex, startupTypeName, startupName) => { };
+        Action<string, string, long> logComplete = (startupTypeName, assemblyName, elapsedMs) => { };
 
-        foreach (var assembly in assemblies)
+        var logger = GetLogger();
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logStart = (startupTypeName, assemblyName) => logger.LogInformation(
+                "Started {StartupTypeName} AutoStartup in assembly {AssemblyName}.", startupTypeName, assemblyName);
+            logRun = (startupTypeName, startupName) => logger.LogInformation(
+                "Running {StartupTypeName} action for {StartupName}.", startupTypeName, startupName);
+            logComplete = (startupTypeName, assemblyName, elapsedMs) => logger.LogInformation(
+                "Completed {StartupTypeName} AutoStartup in assembly {AssemblyName} in {Elapsed_ms}ms.",
+                    startupTypeName, assemblyName, elapsedMs);
+        }
+
+        if (logger.IsEnabled(LogLevel.Error))
+            logError = (ex, startupTypeName, startupName) => logger.LogError(ex,
+                "Error with {StartupTypeName} action for {StartupName}.", startupTypeName, startupName);
+
+        var startupTypeName = typeof(TStartup).Name;
+        foreach (var assembly in assemblies
+            .Distinct())
         {
             var assemblyName = assembly.GetShortName();
             var startups = assembly.GetStartupTypesFromAssembly<TStartup>();
 
-            if (logger.IsEnabled(LogLevel.Information))
-                logger.LogInformation("Started {StartupTypeName} AutoStartup in assembly {AssemblyName}.", 
-                    startupTypeName, assemblyName);
+            logStart(startupTypeName, assemblyName);
+            var stopWatch = Stopwatch.StartNew();
 
             foreach (var startup in startups)
             {
@@ -39,22 +59,17 @@ public static class StartupHelpers
 
                 try
                 {
-                    if (logger.IsEnabled(LogLevel.Information))
-                        logger.LogInformation("Running {StartupTypeName} action for {StartupName}.", 
-                            startupTypeName, startupName);
+                    logRun(startupTypeName, startupName);
                     action(startup);
                 }
                 catch (Exception _ex)
                 {
-                    if (logger.IsEnabled(LogLevel.Error))
-                        logger.LogError(_ex, "Error with {StartupTypeName} action for {StartupName}.",
-                            startupTypeName, startupName);
+                    logError(_ex, startupTypeName, startupName);
                 }
             }
 
-            if (logger.IsEnabled(LogLevel.Information))
-                logger.LogInformation("Completed {StartupTypeName} AutoStartup in assembly {AssemblyName}.",
-                    startupTypeName, assemblyName);
+            stopWatch.Stop();
+            logComplete(startupTypeName, assemblyName, stopWatch.ElapsedMilliseconds);
         }
     }
 

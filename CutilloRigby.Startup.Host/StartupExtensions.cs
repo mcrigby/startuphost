@@ -1,28 +1,28 @@
-﻿using System.Reflection;
-using CutilloRigby.Startup;
+﻿using CutilloRigby.Startup;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Reflection;
 
 namespace Microsoft.Extensions.Configuration
 {
     public static class StartupExtensions
     {
-        public static void ConfigurationConfigureFromAssemblyContaining<TMarker>(this IConfiguration configuration, 
+        public static void ConfigurationConfigureFromAssemblyContaining<TMarker>(this IConfiguration configuration,
             IHostEnvironment environment)
         {
             StartupHelpers.RunCustomStartupActionsFromAssemblyContaining<TMarker, IConfigurationConfigure>(
                 x => x.Configure(environment, configuration));
         }
 
-        public static void ConfigurationConfigureFromAssembliesContaining(this IConfiguration configuration, 
+        public static void ConfigurationConfigureFromAssembliesContaining(this IConfiguration configuration,
             IHostEnvironment environment, params Type[] assemblyMarkers)
         {
             StartupHelpers.RunCustomStartupActionsFromAssembliesContaining<IConfigurationConfigure>(
                 x => x.Configure(environment, configuration), assemblyMarkers);
         }
 
-        public static void ConfigurationConfigureFromAssemblies(this IConfiguration configuration, 
+        public static void ConfigurationConfigureFromAssemblies(this IConfiguration configuration,
             IHostEnvironment environment, params Assembly[] assemblies)
         {
             StartupHelpers.RunCustomStartupActionsFromAssemblies<IConfigurationConfigure>(
@@ -64,20 +64,20 @@ namespace Microsoft.Extensions.Hosting
     {
         public static void ConfigureFromAssemblyContaining<TMarker>(this IHostBuilder hostBuilder)
         {
-            StartupHelpers.RunCustomStartupActionsFromAssemblyContaining<TMarker, IConfigure>(
+            StartupHelpers.RunCustomStartupActionsFromAssemblyContaining<TMarker, IHostConfigure>(
                 x => x.Configure(hostBuilder));
         }
 
         public static void ConfigureFromAssembliesContaining(this IHostBuilder hostBuilder,
             params Type[] assemblyMarkers)
         {
-            StartupHelpers.RunCustomStartupActionsFromAssembliesContaining<IConfigure>(
+            StartupHelpers.RunCustomStartupActionsFromAssembliesContaining<IHostConfigure>(
                 x => x.Configure(hostBuilder), assemblyMarkers);
         }
 
         public static void ConfigureFromAssemblies(this IHostBuilder hostBuilder, params Assembly[] assemblies)
         {
-            StartupHelpers.RunCustomStartupActionsFromAssemblies<IConfigure>(
+            StartupHelpers.RunCustomStartupActionsFromAssemblies<IHostConfigure>(
                 x => x.Configure(hostBuilder), assemblies);
         }
 
@@ -120,14 +120,15 @@ namespace System.Reflection
         {
             return GetStartupTypesFromAssembly<TStartup>(typeof(TMarker).Assembly);
         }
-        
+
         public static IEnumerable<TStartup> GetStartupTypesFromAssembly<TStartup>(this Assembly assembly)
             where TStartup : IStartup
         {
-            var definedTypes = assembly.DefinedTypes
-                .Where(x => typeof(TStartup).IsAssignableFrom(x) && !x.IsInterface && !x.IsAbstract);
+            var tType = typeof(TStartup);
 
-            return definedTypes.Select(Activator.CreateInstance)
+            return assembly.DefinedTypes
+                .Where(x => tType.IsAssignableFrom(x) && !x.IsInterface && !x.IsAbstract)
+                .Select(Activator.CreateInstance)
                 .Cast<TStartup>()
                 .OrderBy(x => x.Order);
         }
